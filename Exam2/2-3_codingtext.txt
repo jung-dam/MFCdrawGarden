@@ -1,0 +1,80 @@
+#include <string>
+#include <vector>
+#include <algorithm> 
+
+using namespace std;
+
+int solution(int a, int b, int c, int d) 
+{
+    if(a==b && b==c && c==d) 
+    {
+        return 1111*a;
+    }
+    
+    int dice[7] = {0};
+    int p = 0;
+    
+    dice[a]++;
+    dice[b]++;
+    dice[c]++;
+    dice[d]++;
+    
+    
+    // 세 주사위 숫자가 같은 경우
+    for (int i = 1; i<=6; i++)
+    { 
+        if (dice[i]==3)
+        {
+            for (int j =1; j<=6; j++)
+            {  
+                if(dice[j] == 1 && j!=i )
+                {
+                    return (10*i +j)*(10*i +j);
+                }               
+            }
+        }
+    }
+    
+    //주사위 두개씩 같은 값이 나오는 경우
+    for (int i = 1; i<=6; i++)
+    {
+        if (dice[i]==2)
+        {
+            for (int j = 1; j <=6; j++ )
+            {
+                if (dice[j] == 2 && j!=i)
+                {
+                    return  (i+j) * abs(i-j);
+                }
+            }
+        }
+    }
+    
+    //주사위 두개만 같고 나머지 두개는 각각 다를 때
+    for (int i = 1; i <= 6; i++) 
+    {
+        if (dice[i] == 2) 
+        {
+            int q = 0, r = 0;
+            for (int j = 1; j <= 6; j++) 
+            {
+                if (dice[j] == 1 && j != i) 
+                {
+                    if (q == 0) 
+                    {
+                        q = j;
+                    } 
+                    else 
+                    {
+                        r = j;
+                        break;
+                    }
+                }
+            }
+            return q * r;
+        }
+    }
+    
+    //네개 주사위 숫자 모두 다를 때
+    return min({a,b,c,d});
+}
