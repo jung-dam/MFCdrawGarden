@@ -81,6 +81,7 @@ BEGIN_MESSAGE_MAP(CMFCdrawGardenDlg, CDialogEx)
 	ON_WM_LBUTTONUP()
 	ON_EN_CHANGE(IDC_EDIT_THICKNESS, &CMFCdrawGardenDlg::OnEnChangeEditThickness)
 	ON_EN_CHANGE(IDC_EDIT_POINT_RDS, &CMFCdrawGardenDlg::OnEnChangeEditPointRds)
+	ON_WM_ERASEBKGND()
 END_MESSAGE_MAP()
 
 
@@ -142,39 +143,58 @@ void CMFCdrawGardenDlg::OnSysCommand(UINT nID, LPARAM lParam)
 //  아래 코드가 필요합니다.  문서/뷰 모델을 사용하는 MFC 애플리케이션의 경우에는
 //  프레임워크에서 이 작업을 자동으로 수행합니다.
 
+//깜빡임 현상 줄이기 위해 추가
+BOOL CMFCdrawGardenDlg::OnEraseBkgnd(CDC* pDC)
+{
+    return TRUE; // 배경을 지우지 않음
+}
+
 void CMFCdrawGardenDlg::OnPaint()
 {
 	CPaintDC dc(this);
-	Gdiplus::Graphics graphics(dc.GetSafeHdc());
+	int nBpp = 32;  // 32비트 ARGB 색상 적용을 위해
 
+	// 다이얼로그의 크기 가져오기
+	CRect clientRect;
+	GetClientRect(&clientRect);
+	int nWidth = clientRect.Width();
+	int nHeight = clientRect.Height();
 
-	// 클릭 지점 원 그리기
-	Gdiplus::SolidBrush fillBrush(Gdiplus::Color(255, 0, 0, 0));
-	//클릭 지점 원의 중심 좌표 표시하기
-	Gdiplus::SolidBrush textBrush(Gdiplus::Color(255, 137, 119, 173)); 
-	Gdiplus::Font font(L"Arial", 10); // 글꼴 설정
+	// 이미지 생성 (메모리에서 작업할 공간 할당)
+	if (m_image.IsNull() || m_image.GetWidth() != nWidth || m_image.GetHeight() != nHeight) {
+		m_image.Destroy(); // 기존 이미지 삭제
+		m_image.Create(nWidth, -nHeight, nBpp);
+	}
+
+	// 메모리 DC 가져오기
+	HDC hMemDC = m_image.GetDC();
+	Gdiplus::Graphics graphics(hMemDC);
+
+	// 배경을 회색으로 초기화
+	Gdiplus::SolidBrush backgroundBrush(Gdiplus::Color(255, 240, 240, 240));
+	graphics.FillRectangle(&backgroundBrush, 0, 0, nWidth, nHeight);
+
+	// 클릭한 지점의 원 그리기
+	for (const auto& point : clickPoints)
+	{
+		drawCircles((unsigned char*)m_image.GetBits(), point.position.x, point.position.y, point.radius, 0x00);
+	}
+
+	// 클릭한 지점의 좌표를 텍스트로 표시
+	Gdiplus::SolidBrush textBrush(Gdiplus::Color(255, 137, 119, 173));
+	Gdiplus::Font font(L"Arial", 10); 
 	Gdiplus::StringFormat format;
 
 	for (const auto& point : clickPoints)
 	{
-		graphics.FillEllipse(&fillBrush,
-			point.position.x - point.radius,  //사용자가 입력한 반지름 적용
-			point.position.y - point.radius,
-			point.radius * 2,
-			point.radius * 2);
-
-		// 좌표 표시할 문자열 생성
 		CString str;
 		str.Format(L"(%d, %d)", point.position.x, point.position.y);
 
-		// 좌표 위치 지정 (원 우측 상단에 배치)
-		Gdiplus::PointF textPos(point.position.x + pointRadius + 5, point.position.y - pointRadius - 5);
-
-		// 문자열을 GDI+ 방식으로 그리기
+		Gdiplus::PointF textPos(point.position.x + point.radius + 5, point.position.y - point.radius - 5);
 		graphics.DrawString(str, -1, &font, textPos, &format, &textBrush);
 	}
 
-	// 원 그리기 (3개 클릭 이후)
+	// 원 (정원이 되는 경우) 그리기
 	if (clickPoints.size() == 3)
 	{
 		Gdiplus::Pen circlePen(Gdiplus::Color(255, 0, 0, 0), circleThickness);
@@ -184,7 +204,56 @@ void CMFCdrawGardenDlg::OnPaint()
 			circleRadius * 2,
 			circleRadius * 2);
 	}
+
+	// 메모리 DC 해제
+	m_image.ReleaseDC();
+
+	// 메모리 이미지를 화면에 출력
+	m_image.Draw(dc, 0, 0);
 }
+
+
+void CMFCdrawGardenDlg::drawCircles(unsigned char* fm, int x, int y, int nRadius, int nGray)
+{
+
+	int nCenterX = x;
+	int nCenterY = y;
+	int nPitch = m_image.GetPitch();
+	int nBpp = 4;  // 32비트 (ARGB)에서 픽셀 당 4바이트
+
+	for (int j = y - nRadius; j <= y + nRadius; j++) {
+		for (int i = x - nRadius; i <= x + nRadius; i++) {
+			if (isInCircle(i, j, nCenterX, nCenterY, nRadius))
+			{
+				// 좌표가 이미지 영역 내에 있는지 확인
+				if (i >= 0 && i < m_image.GetWidth() && j >= 0 && j < m_image.GetHeight()) {
+					int index = j * abs(nPitch) + (i * nBpp);
+					fm[index] = 0;      // Blue 채널
+					fm[index + 1] = 0;  // Green 채널
+					fm[index + 2] = 0;  // Red 채널
+					fm[index + 3] = 255; // Alpha (불투명)
+				}
+			}
+		}
+	}
+}
+
+
+bool CMFCdrawGardenDlg::isInCircle(int i, int j, int nCenterX, int nCenterY, int nRadius)
+{
+	bool bRet = false;
+
+	double dX = i - nCenterX;
+	double dY = j - nCenterY;
+	double dDist = dX * dX + dY * dY;
+
+	if (dDist < nRadius * nRadius) {
+		bRet = true;
+	}
+
+	return bRet;
+}
+
 
 // 사용자가 최소화된 창을 끄는 동안에 커서가 표시되도록 시스템에서
 //  이 함수를 호출합니다.
@@ -251,6 +320,8 @@ void CMFCdrawGardenDlg::OnLButtonDown(UINT nFlags, CPoint point)
 		pointRadius = GetDlgItemInt(IDC_EDIT_POINT_RDS, NULL, FALSE);
 		editThickness = GetDlgItemInt(IDC_EDIT_THICKNESS, NULL, FALSE);
 
+		circleThickness = editThickness;
+
 		// 클릭한 원의 정보 저장
 		ClickPoint newPoint;
 		newPoint.position = point;
@@ -279,7 +350,7 @@ void CMFCdrawGardenDlg::OnLButtonDown(UINT nFlags, CPoint point)
 			}
 		}
 	}
-
+	Invalidate();
 }
 
 void CMFCdrawGardenDlg::OnLButtonUp(UINT nFlags, CPoint point)

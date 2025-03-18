@@ -49,10 +49,13 @@ protected:
 	// 생성된 메시지 맵 함수
 	virtual BOOL OnInitDialog();
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
-	afx_msg void OnPaint();
+	afx_msg
+		BOOL OnEraseBkgnd(CDC* pDC);
+	void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
 private:
+	CImage m_image;
 	vector<ClickPoint> clickPoints;  // POINT 3개
 	CPoint circleCenter; // 계산된 원의 중심 좌표
 	int circleRadius; // 계산된 원의 반지름
@@ -74,4 +77,7 @@ public:
 	void drawCircle();
 	void UpdateEditThickness();
 	void UpdateEditRadius();
+
+	void drawCircles(unsigned char* fm, int i, int j, int nRadius, int nGray);
+	bool isInCircle(int i, int j, int nCenterX, int nCenterY, int nRadius);
 };
